@@ -1,0 +1,30 @@
+{
+  "name": "mcp-server-v1",
+  "version": "1.0.0",
+  "description": "MCP server implementation with TypeScript-aware reference search",
+  "main": "out/server.js",
+  "scripts": {
+    "preinstall": "node scripts/check-environment.js",
+    "prebuild": "mkdir -p out/public && cp -r public/* out/public/",
+    "build": "tsc -p .",
+    "start": "node scripts/check-environment.js && node out/server.js",
+    "dev": "node scripts/check-environment.js && nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/server.ts",
+    "clean": "rimraf out/",
+    "prepare": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "vscode-languageserver": "^8.1.0",
+    "vscode-languageserver-textdocument": "^1.0.8",
+    "vscode-uri": "^3.0.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "nodemon": "^3.0.0",
+    "ts-node": "^10.9.0",
+    "rimraf": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

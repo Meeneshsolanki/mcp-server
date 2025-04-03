@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Reference Search</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .search-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            padding: 8px 12px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 300px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            background: #0366d6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0255b3;
+        }
+        .results {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .file-group {
+            margin-bottom: 20px;
+        }
+        .file-header {
+            font-weight: bold;
+            color: #0366d6;
+            margin-bottom: 10px;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .match {
+            padding: 8px;
+            background: #f8f8f8;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .exact-match {
+            border-left: 3px solid #2ecc71;  /* Green for exact matches */
+        }
+        .partial-match {
+            border-left: 3px solid #3498db;  /* Blue for partial matches */
+        }
+        .match-type {
+            font-size: 0.8em;
+            color: #666;
+            margin-left: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #f0f0f0;
+        }
+        .summary {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f0f8ff;
+            border-radius: 4px;
+            border-left: 4px solid #0366d6;
+        }
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            flex-grow: 1;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #666;
+        }
+        .error {
+            padding: 10px;
+            background: #fee;
+            border-left: 4px solid #e33;
+            color: #c33;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+<div class="search-container">
+    <h1>Code Reference Search</h1>
+    <div>
+        <input type="text" id="searchWord" placeholder="Enter search term..." onkeypress="if(event.key === 'Enter') search()">
+        <button onclick="search()">Search</button>
+    </div>
+</div>
+<div id="results" class="results" style="display: none;">
+    <div id="summary" class="summary"></div>
+    <div id="matches"></div>
+</div>
+
+<script>
+    async function search() {
+        const searchWord = document.getElementById('searchWord').value;
+        if (!searchWord) return;
+
+        const results = document.getElementById('results');
+        const summary = document.getElementById('summary');
+        const matches = document.getElementById('matches');
+
+        results.style.display = 'block';
+        summary.innerHTML = '<div class="loading">Searching...</div>';
+        matches.innerHTML = '';
+
+        try {
+            const response = await fetch('/find-references', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    word: searchWord,
+                    directory: '/Users/MacBook/IdeaProjects/Sourcegraph',
+                    searchStrategy: 'all'
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                summary.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                return;
+            }
+
+            // Updated summary display with exact and partial match counts
+            summary.innerHTML = `
+                    <h3>Search Results</h3>
+                    <p>Found ${data.summary.totalMatches} matches (${data.summary.exactMatches} exact, ${data.summary.partialMatches} partial) in ${data.summary.totalFiles} files</p>
+                    <p>File types: ${Object.entries(data.summary.fileTypes).map(([type, count]) =>
+                `${type}: ${count}`).join(', ')}</p>
+                    <p>Search time: ${data.metadata.searchTime}ms</p>
+                `;
+
+            // Group matches by file
+            const fileGroups = {};
+            data.references.forEach(ref => {
+                if (!fileGroups[ref.relativePath]) {
+                    fileGroups[ref.relativePath] = [];
+                }
+                fileGroups[ref.relativePath].push(ref);
+            });
+
+            // Sort files to show those with exact matches first
+            const sortedFiles = Object.entries(fileGroups).sort((a, b) => {
+                const aHasExact = a[1].some(ref => ref.isExactMatch);
+                const bHasExact = b[1].some(ref => ref.isExactMatch);
+                return bHasExact - aHasExact;
+            });
+
+            // Updated match display with exact/partial match indicators
+            matches.innerHTML = sortedFiles.map(([file, refs]) => `
+                    <div class="file-group">
+                        <div class="file-header">${file}</div>
+                        ${refs
+                .sort((a, b) => b.isExactMatch - a.isExactMatch) // Sort matches to show exact matches first
+                .map(ref => `
+                                <div class="match ${ref.isExactMatch ? 'exact-match' : 'partial-match'}">
+                                    <pre>Line ${ref.line}: ${ref.text}</pre>
+                                    <span class="match-type">${ref.isExactMatch ? 'Exact Match' : 'Partial Match'}</span>
+                                </div>
+                            `).join('')}
+                    </div>
+                `).join('');
+
+        } catch (error) {
+            summary.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+        }
+    }
+
+    // Add event listener for Enter key on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchInput = document.getElementById('searchWord');
+        searchInput.focus(); // Auto-focus the search input
+    });
+</script>
+</body>
+</html>
