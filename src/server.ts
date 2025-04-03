@@ -737,6 +737,12 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    if (req.method === 'GET' && req.url === '/server-directory') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ directory: process.cwd() }));
+        return;
+    }
+
     if (req.method === 'POST' && req.url === '/find-references') {
         let body = '';
 

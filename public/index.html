@@ -119,6 +119,19 @@
 </div>
 
 <script>
+    let serverDirectory = '';
+
+    // Function to get the server directory
+    async function initializeDirectory() {
+        try {
+            const response = await fetch('/server-directory');
+            const data = await response.json();
+            serverDirectory = data.directory;
+        } catch (error) {
+            console.error('Failed to get server directory:', error);
+        }
+    }
+
     async function search() {
         const searchWord = document.getElementById('searchWord').value;
         if (!searchWord) return;
@@ -139,7 +152,7 @@
                 },
                 body: JSON.stringify({
                     word: searchWord,
-                    directory: '/Users/MacBook/IdeaProjects/Sourcegraph',
+                    directory: serverDirectory,
                     searchStrategy: 'all'
                 })
             });
@@ -196,10 +209,11 @@
         }
     }
 
-    // Add event listener for Enter key on page load
-    document.addEventListener('DOMContentLoaded', () => {
+    // Initialize the directory when the page loads
+    document.addEventListener('DOMContentLoaded', async () => {
+        await initializeDirectory();
         const searchInput = document.getElementById('searchWord');
-        searchInput.focus(); // Auto-focus the search input
+        searchInput.focus();
     });
 </script>
 </body>
