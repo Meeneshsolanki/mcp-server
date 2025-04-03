@@ -163,7 +163,7 @@ function checkRipgrep() {
 function checkDirectory() {
     console.log('\n=== Checking Working Directory ===');
     const currentDir = process.cwd();
-    const requiredPath = path.join('src', 'mcp-server', 'v1');
+    const requiredPath = path.join('mcp-server');
 
     console.log(`Current directory: ${currentDir}`);
     console.log(`Required path should end with: ${requiredPath}`);
