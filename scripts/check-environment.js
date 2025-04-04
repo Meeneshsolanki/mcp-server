@@ -11,6 +11,19 @@ function executeCommand(command) {
     }
 }
 
+function installWithBrew(package) {
+    console.log(`\n📦 Installing ${package} with Homebrew...`);
+    try {
+        console.log(`Running: brew install ${package}`);
+        execSync(`brew install ${package}`, { stdio: 'inherit' });
+        console.log(`✅ Successfully installed ${package}`);
+        return true;
+    } catch (error) {
+        console.error(`❌ Failed to install ${package}:`, error.message);
+        return false;
+    }
+}
+
 function checkHomebrew() {
     console.log('\n=== Checking Homebrew Installation ===');
     const brewVersion = executeCommand('brew --version');
@@ -67,37 +80,23 @@ function checkBrewPath() {
 function checkNodeVersion() {
     console.log('\n=== Checking Node.js Installation ===');
     const requiredVersion = 14;
-    const currentVersion = process.version.match(/^v(\d+)/)[1];
+    const nodeVersion = executeCommand('node --version');
 
-    console.log(`Current Node.js version: ${process.version}`);
+    if (!nodeVersion) {
+        console.log('❌ Node.js is not installed');
+        console.log('🔄 Installing Node.js...');
+        return installWithBrew('node');
+    }
+
+    const currentVersion = nodeVersion.match(/^v(\d+)/)[1];
+    console.log(`Current Node.js version: ${nodeVersion.trim()}`);
 
     if (parseInt(currentVersion) < requiredVersion) {
         console.log(`❌ Node.js version ${requiredVersion} or higher is required`);
-        if (os.platform() === 'darwin') {
-            console.log('\nTo install/update Node.js on macOS:');
-            if (executeCommand('brew --version')) {
-                console.log('\nUsing Homebrew:');
-                console.log('brew install node@14');
-                console.log('brew link node@14');
-            } else {
-                console.log('\nUsing nvm (Node Version Manager):');
-                console.log('1. Install nvm:');
-                console.log('curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash');
-                console.log('\n2. Restart your terminal and install Node.js:');
-                console.log('nvm install 14');
-                console.log('nvm use 14');
-            }
-        } else if (os.platform() === 'linux') {
-            console.log('\nOn Ubuntu/Debian:');
-            console.log('curl -fsSL https://deb.nodesource.com/setup_14.x | sudo -E bash -');
-            console.log('sudo apt-get install -y nodejs');
-        } else if (os.platform() === 'win32') {
-            console.log('\nOn Windows:');
-            console.log('1. Download Node.js installer from: https://nodejs.org/');
-            console.log('2. Run the installer');
-        }
-        return false;
+        console.log('🔄 Updating Node.js...');
+        return installWithBrew('node');
     }
+
     console.log('✅ Node.js version is compatible');
     return true;
 }
@@ -112,52 +111,22 @@ function checkNpm() {
     }
 
     console.log('❌ npm is not installed properly');
-    console.log('Please reinstall Node.js which includes npm');
-    return false;
+    console.log('🔄 Reinstalling Node.js to fix npm...');
+    return installWithBrew('node');
 }
 
 function checkRipgrep() {
     console.log('\n=== Checking ripgrep Installation ===');
     const rgVersion = executeCommand('rg --version');
 
-    if (rgVersion) {
-        console.log(`✅ ripgrep is installed (${rgVersion.split('\n')[0]})`);
-        return true;
+    if (!rgVersion) {
+        console.log('❌ ripgrep is not installed');
+        console.log('🔄 Installing ripgrep...');
+        return installWithBrew('ripgrep');
     }
 
-    console.log('❌ ripgrep is not installed');
-
-    switch (os.platform()) {
-        case 'darwin':
-            if (executeCommand('brew --version')) {
-                console.log('\nTo install ripgrep using Homebrew:');
-                console.log('brew install ripgrep');
-            } else {
-                console.log('\nPlease install Homebrew first, then run:');
-                console.log('brew install ripgrep');
-            }
-            break;
-
-        case 'linux':
-            console.log('\nOn Ubuntu/Debian:');
-            console.log('sudo apt-get update && sudo apt-get install ripgrep');
-            console.log('\nOn Fedora:');
-            console.log('sudo dnf install ripgrep');
-            break;
-
-        case 'win32':
-            console.log('\nOn Windows:');
-            console.log('Using Chocolatey:');
-            console.log('choco install ripgrep');
-            console.log('\nOr using Scoop:');
-            console.log('scoop install ripgrep');
-            break;
-
-        default:
-            console.log('\nPlease visit: https://github.com/BurntSushi/ripgrep#installation');
-    }
-
-    return false;
+    console.log(`✅ ripgrep is installed (${rgVersion.split('\n')[0]})`);
+    return true;
 }
 
 function checkDirectory() {
@@ -193,7 +162,7 @@ function printStartupInstructions() {
     console.log('   http://localhost:3000');
 }
 
-function runChecks() {
+async function runChecks() {
     console.log('=== Environment Setup Check ===');
 
     const checks = [
@@ -201,18 +170,20 @@ function runChecks() {
         { name: 'Homebrew PATH', check: checkBrewPath, required: true },
         { name: 'Node.js', check: checkNodeVersion, required: true },
         { name: 'npm', check: checkNpm, required: true },
-        { name: 'ripgrep', check: checkRipgrep, required: false },
+        { name: 'ripgrep', check: checkRipgrep, required: true }, // Changed to required: true
         { name: 'Directory', check: checkDirectory, required: true }
     ];
 
     let allPassed = true;
-    const results = checks.map(({ name, check, required }) => {
-        const passed = check();
+    const results = [];
+
+    for (const { name, check, required } of checks) {
+        const passed = await check();
         if (!passed && required) {
             allPassed = false;
         }
-        return { name, passed, required };
-    });
+        results.push({ name, passed, required });
+    }
 
     console.log('\n=== Installation Summary ===');
     results.forEach(({ name, passed, required }) => {
@@ -240,6 +211,13 @@ process.on('uncaughtException', (error) => {
 });
 
 // Run all checks and exit with appropriate code
-if (!runChecks()) {
-    process.exit(1);
-}
+(async () => {
+    try {
+        if (!await runChecks()) {
+            process.exit(1);
+        }
+    } catch (error) {
+        console.error('\n❌ An unexpected error occurred:', error.message);
+        process.exit(1);
+    }
+})();
